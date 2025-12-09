@@ -30,14 +30,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  /// Daftar halaman untuk tiap tab bottom navigation
-  /// urutannya HARUS sama dengan urutan items di BottomNavigationBar.
-  final List<Widget> _pages = const [
-    Home(), // tab 0: Discover / Home
-    Nearby(), // tab 1: Nearby
-    Placeholder(), // tab 2: Bookmarks (dummy dulu)
-    Placeholder(), // tab 3: Profile (dummy dulu)
-  ];
+  final List<Widget> _pages = const [Home(), Nearby()];
 
   void _onItemTapped(int index) {
     setState(() {

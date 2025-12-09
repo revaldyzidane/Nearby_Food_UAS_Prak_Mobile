@@ -9,11 +9,10 @@ class GeoapifyPlacesService {
   GeoapifyPlacesService({String? apiKeyOverride})
       : apiKey = apiKeyOverride ?? geoapifyApiKey;
 
-  /// 🔹 Fungsi generik: bisa untuk restaurant, fast_food, cafe, dll
   Future<List<PlaceGeoapify>> getNearbyPlaces({
     required double lat,
     required double lon,
-    String categories = 'catering.restaurant', // default: restoran
+    String categories = 'catering.restaurant',
     int radiusInMeters = 10000,
     int limit = 50,
   }) async {
@@ -40,7 +39,6 @@ class GeoapifyPlacesService {
         .toList();
   }
 
-  /// 🔹 Wrapper lama: untuk kode lain yang masih pakai "restaurants"
   Future<List<PlaceGeoapify>> getNearbyRestaurants(
     double lat,
     double lon, {

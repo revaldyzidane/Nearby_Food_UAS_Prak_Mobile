@@ -6,16 +6,14 @@ class PlaceGeoapify {
   final String? address;
   final List<String> categories;
   final int? distanceMeters;
-
-  // === Field tambahan untuk detail page ===
   final String? description;
-  final String? cuisine; // catering.cuisine
-  final String? openingHours; // opening_hours
-  final Map<String, bool>? paymentOptions; // payment_options
+  final String? cuisine; 
+  final String? openingHours; 
+  final Map<String, bool>? paymentOptions; 
   final String? street;
   final String? houseNumber;
   final String? city;
-  final String? phone; // contact.phone
+  final String? phone; 
   final String? website;
 
   PlaceGeoapify({
@@ -72,7 +70,7 @@ class PlaceGeoapify {
       }
     }
 
-    // payment_options -> Map<String, bool>
+    // payment_options
     Map<String, bool>? paymentOptions;
     final paymentRaw = props['payment_options'];
     if (paymentRaw is Map<String, dynamic>) {
