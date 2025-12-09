@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:nearby_food/page/home.dart';
 import 'package:nearby_food/page/nearby.dart';
 
-
 void main() {
   runApp(const MyApp());
 }
@@ -31,10 +30,13 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  // daftar halaman
+  /// Daftar halaman untuk tiap tab bottom navigation
+  /// urutannya HARUS sama dengan urutan items di BottomNavigationBar.
   final List<Widget> _pages = const [
-    Home(),
-    Nearby(),
+    Home(), // tab 0: Discover / Home
+    Nearby(), // tab 1: Nearby
+    Placeholder(), // tab 2: Bookmarks (dummy dulu)
+    Placeholder(), // tab 3: Profile (dummy dulu)
   ];
 
   void _onItemTapped(int index) {
@@ -46,7 +48,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _pages[_selectedIndex], 
+      body: _pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,

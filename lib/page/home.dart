@@ -1,45 +1,188 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 
-class Home extends StatelessWidget {
+import 'nearby.dart';
+import 'restaurant_detail_page.dart';
+import '../geoapify_places_service.dart';
+import '../place_geoapify.dart';
+
+class Home extends StatefulWidget {
   const Home({super.key});
+
+  @override
+  State<Home> createState() => _HomeState();
+}
+
+class _HomeState extends State<Home> {
+  final _geoService = GeoapifyPlacesService();
+
+  String? _currentAddress;
+
+  bool _isLoadingNearby = true;
+  String? _nearbyError;
+  List<PlaceGeoapify> _nearbyPlaces = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentAddressAndNearby();
+  }
+
+  String _assetForPlace(PlaceGeoapify p) {
+    final cuisine = (p.cuisine ?? '').toLowerCase();
+    final cats = p.categories.map((c) => c.toLowerCase()).toList();
+
+    if (cuisine.contains('chicken')) {
+      return 'assets/images/ayam.jpg';
+    }
+
+    if (cats.any((c) => c.contains('fast_food')) ||
+        cuisine.contains('fast_food') ||
+        cuisine.contains('burger') ||
+        cuisine.contains('pizza')) {
+      return 'assets/images/pizza.jpg';
+    }
+
+    if (cats.any((c) => c.contains('cafe')) ||
+        cuisine.contains('coffee') ||
+        cuisine.contains('cafe')) {
+      return 'assets/images/cafe.jpg';
+    }
+
+    if (cuisine.contains('asian')) {
+      return 'assets/images/warung.jpg';
+    }
+
+    // Default
+    return 'assets/images/sambel.jpg';
+  }
+
+  Future<void> _loadCurrentAddressAndNearby() async {
+    try {
+      // Cek service lokasi
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        setState(() {
+          _isLoadingNearby = false;
+          _nearbyError = 'Location service tidak aktif.';
+        });
+        return;
+      }
+
+      // Cek & minta izin
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (!mounted) return;
+          setState(() {
+            _isLoadingNearby = false;
+            _nearbyError = 'Izin lokasi ditolak.';
+          });
+          return;
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        setState(() {
+          _isLoadingNearby = false;
+          _nearbyError = 'Izin lokasi ditolak permanen.';
+        });
+        return;
+      }
+
+      // Posisi sekarang
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      _loadNearbyRestaurants(pos);
+
+      // alamat
+      try {
+        final placemarks =
+            await placemarkFromCoordinates(pos.latitude, pos.longitude);
+        if (placemarks.isNotEmpty) {
+          final p = placemarks.first;
+          final parts = <String>[];
+          if (p.street != null && p.street!.isNotEmpty) parts.add(p.street!);
+          if (p.subLocality != null && p.subLocality!.isNotEmpty) {
+            parts.add(p.subLocality!);
+          }
+          if (p.locality != null && p.locality!.isNotEmpty) {
+            parts.add(p.locality!);
+          }
+          final addr = parts.join(', ');
+          if (mounted) {
+            setState(() {
+              _currentAddress =
+                  addr.isNotEmpty ? addr : "Lokasi tidak diketahui";
+            });
+          }
+        }
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _currentAddress ??= "Lokasi tidak diketahui";
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingNearby = false;
+        _nearbyError = 'Gagal mendapatkan lokasi: $e';
+      });
+    }
+  }
+
+  Future<void> _loadNearbyRestaurants(Position pos) async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingNearby = true;
+      _nearbyError = null;
+    });
+
+    try {
+      final all = await _geoService.getNearbyPlaces(
+        lat: pos.latitude,
+        lon: pos.longitude,
+        categories: 'catering',
+      );
+      final limited =
+          all.length <= 5 ? all : all.take(5).toList(growable: false);
+
+      if (!mounted) return;
+      setState(() {
+        _nearbyPlaces = limited;
+        _isLoadingNearby = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingNearby = false;
+        _nearbyError = 'Gagal memuat tempat makan terdekat: $e';
+      });
+    }
+  }
+
+  String _formatDistance(PlaceGeoapify p) {
+    final d = p.distanceMeters;
+    if (d == null) return '';
+    if (d >= 1000) {
+      final km = d / 1000;
+      return '${km.toStringAsFixed(1)} km';
+    }
+    return '$d m';
+  }
 
   @override
   Widget build(BuildContext context) {
     final categories = [
-      {"icon": Icons.restaurant, "name": "Food"},
-      {"icon": Icons.local_grocery_store, "name": "Grocery"},
-      {"icon": Icons.local_drink, "name": "Beverages"},
-      {"icon": Icons.spa, "name": "Vegetables"},
-    ];
-
-    final deals = [
-      {
-        "title": "Amul Ice Cream Parlour",
-        "discount": "12% discount",
-        "image":
-            "https://images.unsplash.com/photo-1600891964599-f61ba0e24092?auto=format&fit=crop&w=400&q=80",
-      },
-      {
-        "title": "Cafe Latte",
-        "discount": "20% off",
-        "image":
-            "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=400&q=80",
-      },
-    ];
-
-    final nearby = [
-      {
-        "name": "Biryani Shah",
-        "rating": "4.3",
-        "image":
-            "https://i.pinimg.com/1200x/f6/96/51/f696516c55ed31b44242d982ea79860a.jpg",
-      },
-      {
-        "name": "Juice Galaxy",
-        "rating": "4.5",
-        "image":
-            "https://images.unsplash.com/photo-1558642452-9d2a7deb7f62?auto=format&fit=crop&w=400&q=80",
-      },
+      {"icon": Icons.restaurant, "name": "Restaurant", "key": "restaurant"},
+      {"icon": Icons.local_cafe, "name": "Cafe", "key": "cafe"},
+      {"icon": Icons.fastfood, "name": "Fast Food", "key": "fast_food"},
     ];
 
     return Scaffold(
@@ -47,7 +190,7 @@ class Home extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Header
+            // HEADER 
             Stack(
               children: [
                 ClipRRect(
@@ -100,18 +243,23 @@ class Home extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Row(
-                        children: const [
-                          Icon(
+                        children: [
+                          const Icon(
                             Icons.location_on_outlined,
                             color: Colors.white,
                             size: 18,
                           ),
-                          SizedBox(width: 5),
-                          Text(
-                            "1124 Jupiter, Blackhole, Delhi",
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
+                          const SizedBox(width: 5),
+                          SizedBox(
+                            width: MediaQuery.of(context).size.width * 0.7,
+                            child: Text(
+                              _currentAddress ?? 'Menentukan lokasi...',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ],
@@ -120,7 +268,7 @@ class Home extends StatelessWidget {
                   ),
                 ),
 
-                // SEARCH BAR
+                // SEARCH BAR 
                 Positioned(
                   bottom: 15,
                   left: 20,
@@ -134,9 +282,8 @@ class Home extends StatelessWidget {
                         hintText: "Search for food/stores etc...",
                         filled: true,
                         fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                        ),
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 14),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(25),
                           borderSide: BorderSide.none,
@@ -148,7 +295,7 @@ class Home extends StatelessWidget {
               ],
             ),
 
-            // Kategori
+            // KATEGORI 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Column(
@@ -161,175 +308,57 @@ class Home extends StatelessWidget {
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: categories
-                        .map(
-                          (c) => Column(
-                            children: [
-                              CircleAvatar(
-                                radius: 30,
-                                backgroundColor: Colors.redAccent.shade100,
-                                child: Icon(
-                                  c["icon"] as IconData,
-                                  color: Colors.white,
-                                  size: 28,
-                                ),
+                    children: categories.map((c) {
+                      return InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => Nearby(
+                                initialCategoryKey: c["key"] as String,
                               ),
-                              const SizedBox(height: 6),
-                              Text(
-                                c["name"].toString(),
-                                style: const TextStyle(fontSize: 14),
+                            ),
+                          );
+                        },
+                        child: Column(
+                          children: [
+                            CircleAvatar(
+                              radius: 30,
+                              backgroundColor: Colors.redAccent.shade100,
+                              child: Icon(
+                                c["icon"] as IconData,
+                                color: Colors.white,
+                                size: 28,
                               ),
-                            ],
-                          ),
-                        )
-                        .toList(),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              c["name"].toString(),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ],
               ),
             ),
 
-            // Deals of the Day
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Deals of the Day",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 190,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: deals.length,
-                      itemBuilder: (context, index) {
-                        final d = deals[index];
-                        return Container(
-                          width: 240,
-                          margin: const EdgeInsets.only(right: 16),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(15),
-                            color: Colors.white,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.grey.withOpacity(0.2),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ClipRRect(
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(15),
-                                ),
-                                child: Image.network(
-                                  d["image"]!,
-                                  height: 110,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 6,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      d["title"]!,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      d["discount"]!,
-                                      style: const TextStyle(
-                                        color: Colors.redAccent,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Restoran Terdekat
+            // TEMPAT MAKAN TERDEKAT 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    "Resto Terdekat",
+                    "Tempat Makan Terdekat",
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
                     height: 160,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: nearby.length,
-                      itemBuilder: (context, index) {
-                        final item = nearby[index];
-                        return Container(
-                          width: 140,
-                          margin: const EdgeInsets.only(right: 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.network(
-                                  item["image"]!,
-                                  height: 90,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                item["name"]!,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.star,
-                                    color: Colors.amber,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    item["rating"]!,
-                                    style: const TextStyle(color: Colors.grey),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                    child: _buildNearbyList(),
                   ),
                 ],
               ),
@@ -337,6 +366,99 @@ class Home extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildNearbyList() {
+    if (_isLoadingNearby) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_nearbyError != null) {
+      return Center(
+        child: Text(
+          _nearbyError!,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.red),
+        ),
+      );
+    }
+
+    if (_nearbyPlaces.isEmpty) {
+      return const Center(child: Text('Tidak ada tempat makan terdekat.'));
+    }
+
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      itemCount: _nearbyPlaces.length,
+      itemBuilder: (context, index) {
+        final place = _nearbyPlaces[index];
+        final distance = _formatDistance(place);
+        final imagePath = _assetForPlace(place);
+
+        return SizedBox(
+          width: 140,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => RestaurantDetailPage(
+                      place: place,
+                      distance: distance,
+                      imagePath: imagePath,
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                margin: const EdgeInsets.only(right: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.asset(
+                        imagePath,
+                        height: 90,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      place.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.star,
+                          color: Colors.amber,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          distance.isNotEmpty ? distance : "-",
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
